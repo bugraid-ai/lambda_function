@@ -396,12 +396,6 @@ def debug_dynamo_response(incidents, company_id):
             return {"status": "TEST_QUERY_FAILED", "error": str(e)}
     
     return {"status": "DATA_FOUND", "count": len(incidents)}
-
-@app.get("/")
-async def root():
-    """Health check endpoint."""
-    return {"status": "online", "service": "incident-query-api"}
-
 @app.post("/query")
 async def query_dynamodb(request: QueryRequest):
     """API endpoint to process user query and fetch results from DynamoDB."""
@@ -456,73 +450,6 @@ async def query_dynamodb(request: QueryRequest):
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# Additional helper endpoints for debugging
-@app.get("/debug/table-info")
-async def get_table_info():
-    """Debug endpoint to check table configuration."""
-    try:
-        tables = dynamodb_client.list_tables()
-        
-        if DYNAMO_TABLE_NAME in tables["TableNames"]:
-            table_desc = dynamodb_client.describe_table(TableName=DYNAMO_TABLE_NAME)
-            scan_result = dynamodb_client.scan(
-                TableName=DYNAMO_TABLE_NAME,
-                Select="COUNT"
-            )
-            
-            return {
-                "status": "success",
-                "table_exists": True,
-                "item_count": scan_result.get("Count", 0),
-                "key_schema": table_desc.get("Table", {}).get("KeySchema", []),
-                "region": DYNAMODB_REGION
-            }
-        else:
-            return {
-                "status": "warning",
-                "table_exists": False,
-                "available_tables": tables["TableNames"],
-                "configured_table": DYNAMO_TABLE_NAME,
-                "region": DYNAMODB_REGION
-            }
-    except Exception as e:
-        logger.error(f"Error getting table info: {str(e)}")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-
-@app.get("/debug/scan-sample")
-async def scan_sample(company_id: str = None, limit: int = 5):
-    """Debug endpoint to scan a sample of records."""
-    try:
-        query = {"TableName": DYNAMO_TABLE_NAME, "Limit": limit}
-        
-        if company_id:
-            query["FilterExpression"] = "company_id = :company_id"
-            query["ExpressionAttributeValues"] = {":company_id": {"S": company_id}}
-            
-        result = dynamodb_client.scan(**query)
-        
-        if result.get("Items", []):
-            return {
-                "status": "success",
-                "count": len(result["Items"]),
-                "sample": result["Items"]
-            }
-        else:
-            return {
-                "status": "warning",
-                "message": "No items found with the given criteria",
-                "query_used": query
-            }
-    except Exception as e:
-        logger.error(f"Error scanning sample: {str(e)}")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
 
 if __name__ == "__main__":
     import uvicorn
